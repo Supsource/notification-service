@@ -11,6 +11,12 @@ type NotificationService struct {
 	repo repository.NotificationRepository
 }
 
+func NewNotificationService(repo repository.NotificationRepository) *NotificationService {
+	return &NotificationService{
+		repo: repo,
+	}
+}
+
 func (s *NotificationService) CreateNotification(
 	userID string,
 	nType model.NotificationType,
@@ -29,5 +35,3 @@ func (s *NotificationService) CreateNotification(
 
 	return s.repo.Create(notification)
 }
-
-// service generates UUID, sets status and repo just saves
