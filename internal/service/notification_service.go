@@ -2,18 +2,21 @@ package service
 
 import (
 	"notification-service/internal/model"
+	"notification-service/internal/queue"
 	"notification-service/internal/repository"
 
 	"github.com/google/uuid"
 )
 
 type NotificationService struct {
-	repo repository.NotificationRepository
+	repo     repository.NotificationRepository
+	producer *queue.Producer
 }
 
-func NewNotificationService(repo repository.NotificationRepository) *NotificationService {
+func NewNotificationService(repo repository.NotificationRepository, producer *queue.Producer) *NotificationService {
 	return &NotificationService{
-		repo: repo,
+		repo:     repo,
+		producer: producer,
 	}
 }
 
@@ -33,5 +36,9 @@ func (s *NotificationService) CreateNotification(
 		RetryCount: 0,
 	}
 
-	return s.repo.Create(notification)
+	if err := s.repo.Create(notification); err != nil {
+		return err
+	}
+
+	return s.producer.Enqueue(notification.ID)
 }
