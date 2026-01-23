@@ -3,6 +3,7 @@ package main
 import (
 	"notification-service/internal/db"
 	"notification-service/internal/handler"
+	"notification-service/internal/queue"
 	"notification-service/internal/repository"
 	"notification-service/internal/service"
 
@@ -13,7 +14,9 @@ func main() {
 	dbPool := db.NewPostgresPool()
 
 	repo := repository.NewPostgresNotificationRepo(dbPool)
-	notificationService := service.NewNotificationService(repo)
+	rdb := queue.NewRedisClient()
+	producer := queue.NewProducer(rdb, queue.NotificationQueue)
+	notificationService := service.NewNotificationService(repo, producer)
 	notificationHandler := handler.NewNotificationHandler(notificationService)
 
 	r := gin.Default()

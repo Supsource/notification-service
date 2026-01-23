@@ -15,6 +15,8 @@ func main() {
 	repo := repository.NewPostgresNotificationRepo(dbPool)
 
 	rdb := queue.NewRedisClient()
+	producer := queue.NewProducer(rdb, queue.NotificationQueue)
+	dlqProducer := queue.NewProducer(rdb, queue.NotificationDLQ)
 
 	for {
 		result, err := rdb.BRPop(context.Background(), 0, queue.NotificationQueue).Result()
@@ -29,6 +31,6 @@ func main() {
 			continue
 		}
 
-		processNotification(job.NotificationID, repo)
+		processNotification(job.NotificationID, repo, producer, dlqProducer)
 	}
 }
