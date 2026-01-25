@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"notification-service/internal/delivery"
 	"notification-service/internal/model"
 	"notification-service/internal/queue"
 	"notification-service/internal/repository"
@@ -14,11 +15,24 @@ func processNotification(
 	repo repository.NotificationRepository,
 	producer *queue.Producer,
 	dlqProducer *queue.Producer,
+	factory *delivery.Factory,
 ) {
 	n, err := repo.GetByID(id)
 	if err != nil {
 		log.Println("notification not found:", err)
 		return
+	}
+
+	sender := factory.GetSender(n.Type)
+	if sender == nil {
+		// mark failed → unsupported type
+		repo.UpdateStatus(id, model.StatusFailed, strPtr("unsupported notification type"))
+		return
+	}
+
+	err = sender.Send(n)
+	if err != nil {
+		log.Println("sender.Send failed:", err)
 	}
 
 	// mark processing here
