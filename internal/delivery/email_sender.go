@@ -3,20 +3,21 @@ package delivery
 import (
 	"fmt"
 	"net/smtp"
+
 	"notification-service/internal/model"
 )
 
-Type EmailSender struct {
-	host string
-	port string
+type EmailSender struct {
+	host     string
+	port     string
 	username string
 	password string
 }
 
 func NewEmailSender(host, port, user, pass string) *EmailSender {
 	return &EmailSender{
-		host: host,
-		port: port,
+		host:     host,
+		port:     port,
 		username: user,
 		password: pass,
 	}
@@ -35,7 +36,7 @@ func (s *EmailSender) Send(n *model.Notification) error {
 		s.host+":"+s.port,
 		auth,
 		s.username,
-		[]string{"user@example.com"}, // todo -> will fetch actual user email 
- 		msg,
+		[]string{"user@example.com"}, // todo -> will fetch actual user email
+		msg,
 	)
 }
