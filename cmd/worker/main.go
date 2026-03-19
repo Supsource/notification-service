@@ -2,35 +2,23 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 
 	"notification-service/internal/db"
-	"notification-service/internal/queue"
+	"notification-service/internal/delivery"
 	"notification-service/internal/repository"
+	"notification-service/internal/workers"
 )
 
 func main() {
 	dbPool := db.NewPostgresPool()
-	repo := repository.NewPostgresNotificationRepo(dbPool)
+	outboxRepo := repository.NewPostgresOutboxRepo(dbPool)
 
-	rdb := queue.NewRedisClient()
-	producer := queue.NewProducer(rdb, queue.NotificationQueue)
-	dlqProducer := queue.NewProducer(rdb, queue.NotificationDLQ)
+	factory := delivery.NewFactory(
+		&delivery.EmailSender{},
+		&delivery.PushSender{},
+	)
 
-	for {
-		result, err := rdb.BRPop(context.Background(), 0, queue.NotificationQueue).Result()
-		if err != nil {
-			log.Println("redis error:", err)
-			continue
-		}
-
-		var job queue.NotificationJob
-		if err := json.Unmarshal([]byte(result[1]), &job); err != nil {
-			log.Println("invalid job:", err)
-			continue
-		}
-
-		processNotification(job.NotificationID, repo, producer, dlqProducer)
-	}
+	worker := workers.NewOutboxWorker(outboxRepo, factory, log.Default())
+	worker.Run(context.Background())
 }
