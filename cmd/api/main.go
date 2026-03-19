@@ -3,7 +3,6 @@ package main
 import (
 	"notification-service/internal/db"
 	"notification-service/internal/handler"
-	"notification-service/internal/queue"
 	"notification-service/internal/repository"
 	"notification-service/internal/service"
 
@@ -14,16 +13,16 @@ func main() {
 	dbPool := db.NewPostgresPool()
 
 	repo := repository.NewPostgresNotificationRepo(dbPool)
-	rdb := queue.NewRedisClient()
-	producer := queue.NewProducer(rdb, queue.NotificationQueue)
-	notificationService := service.NewNotificationService(repo, producer)
+	outboxRepo := repository.NewPostgresOutboxRepo(dbPool)
+	notificationService := service.NewNotificationService(repo, outboxRepo)
 	notificationHandler := handler.NewNotificationHandler(notificationService)
+	adminHandler := handler.NewAdminHandler(outboxRepo)
 
 	r := gin.Default()
 
 	r.POST("/notifications", notificationHandler.CreateNotification)
-	// route will be added later
-	_ = notificationService
+	r.GET("/admin/failed-notifications", adminHandler.ListFailedNotifications)
+	r.POST("/admin/retry-failed", adminHandler.RetryFailedNotifications)
 
 	r.Run(":8080")
 }
