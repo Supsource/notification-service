@@ -1,22 +1,25 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"time"
+
 	"notification-service/internal/model"
-	"notification-service/internal/queue"
 	"notification-service/internal/repository"
 
 	"github.com/google/uuid"
 )
 
 type NotificationService struct {
-	repo     repository.NotificationRepository
-	producer *queue.Producer
+	repo       repository.NotificationRepository
+	outboxRepo repository.OutboxRepository
 }
 
-func NewNotificationService(repo repository.NotificationRepository, producer *queue.Producer) *NotificationService {
+func NewNotificationService(repo repository.NotificationRepository, outboxRepo repository.OutboxRepository) *NotificationService {
 	return &NotificationService{
-		repo:     repo,
-		producer: producer,
+		repo:       repo,
+		outboxRepo: outboxRepo,
 	}
 }
 
@@ -40,5 +43,26 @@ func (s *NotificationService) CreateNotification(
 		return err
 	}
 
-	return s.producer.Enqueue(notification.ID)
+	payload := model.OutboxPayload{
+		NotificationID: notification.ID,
+		UserID:         userID,
+		Type:           nType,
+		Title:          title,
+		Body:           body,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	outbox := &model.OutboxNotification{
+		ID:          uuid.New().String(),
+		UserID:      userID,
+		Payload:     raw,
+		Status:      model.OutboxStatusPending,
+		RetryCount:  0,
+		NextRetryAt: time.Now(),
+	}
+
+	return s.outboxRepo.Enqueue(context.Background(), outbox)
 }
