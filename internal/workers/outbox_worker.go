@@ -19,6 +19,7 @@ const (
 )
 
 type OutboxWorker struct {
+	notificationRepo  repository.NotificationRepository
 	outboxRepo        repository.OutboxRepository
 	factory           *delivery.Factory
 	batchSize         int
@@ -27,11 +28,12 @@ type OutboxWorker struct {
 	logger            *log.Logger
 }
 
-func NewOutboxWorker(outboxRepo repository.OutboxRepository, factory *delivery.Factory, logger *log.Logger) *OutboxWorker {
+func NewOutboxWorker(notificationRepo repository.NotificationRepository, outboxRepo repository.OutboxRepository, factory *delivery.Factory, logger *log.Logger) *OutboxWorker {
 	if logger == nil {
 		logger = log.Default()
 	}
 	return &OutboxWorker{
+		notificationRepo:  notificationRepo,
 		outboxRepo:        outboxRepo,
 		factory:           factory,
 		batchSize:         defaultBatchSize,
@@ -94,28 +96,49 @@ func (w *OutboxWorker) processItem(ctx context.Context, item model.OutboxNotific
 		Body:   payload.Body,
 	}
 
+	if notification.ID == "" {
+		w.logger.Printf("outbox %s missing notification id", item.ID)
+		_ = w.outboxRepo.MarkFailed(ctx, item.ID)
+		return
+	}
+
+	if err := w.notificationRepo.UpdateStatus(notification.ID, model.StatusProcessing, nil); err != nil {
+		w.logger.Printf("outbox %s failed to mark notification processing: %v", item.ID, err)
+		_ = w.outboxRepo.ScheduleRetry(ctx, item.ID, item.RetryCount, time.Now().Add(backoffDuration(1)))
+		return
+	}
+
 	sender := w.factory.GetSender(notification.Type)
 	if sender == nil {
 		w.logger.Printf("outbox %s unsupported type: %s", item.ID, notification.Type)
+		reason := "unsupported notification type"
+		_ = w.notificationRepo.UpdateStatus(notification.ID, model.StatusFailed, &reason)
 		_ = w.outboxRepo.MarkFailed(ctx, item.ID)
 		return
 	}
 
 	if err := sender.Send(notification); err != nil {
 		retryCount := item.RetryCount + 1
-		if retryCount > maxRetries {
-			w.logger.Printf("outbox %s failed permanently after %d retries: %v", item.ID, item.RetryCount, err)
+		if retryCount >= maxRetries {
+			w.logger.Printf("outbox %s failed permanently after %d retries: %v", item.ID, retryCount, err)
+			reason := err.Error()
+			_ = w.notificationRepo.UpdateStatus(notification.ID, model.StatusFailed, &reason)
+			_ = w.notificationRepo.IncrementRetry(notification.ID)
 			_ = w.outboxRepo.MarkFailed(ctx, item.ID)
 			return
 		}
 
 		nextRetry := time.Now().Add(backoffDuration(retryCount))
 		w.logger.Printf("outbox %s retry %d scheduled at %s: %v", item.ID, retryCount, nextRetry.Format(time.RFC3339), err)
+		reason := err.Error()
+		_ = w.notificationRepo.IncrementRetry(notification.ID)
+		_ = w.notificationRepo.UpdateStatus(notification.ID, model.StatusPending, &reason)
 		_ = w.outboxRepo.ScheduleRetry(ctx, item.ID, retryCount, nextRetry)
 		return
 	}
 
 	w.logger.Printf("outbox %s sent successfully", item.ID)
+	_ = w.notificationRepo.UpdateStatus(notification.ID, model.StatusSent, nil)
 	_ = w.outboxRepo.MarkSent(ctx, item.ID)
 }
 

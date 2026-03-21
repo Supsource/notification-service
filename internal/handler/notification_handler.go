@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"notification-service/internal/model"
 	"notification-service/internal/service"
@@ -9,7 +10,11 @@ import (
 )
 
 type NotificationHandler struct {
-	service *service.NotificationService
+	service notificationCreator
+}
+
+type notificationCreator interface {
+	CreateNotification(userID string, nType model.NotificationType, title string, body string) error
 }
 
 func NewNotificationHandler(s *service.NotificationService) *NotificationHandler {
@@ -23,15 +28,25 @@ func (h *NotificationHandler) CreateNotification(c *gin.Context) {
 		return
 	}
 
-	err := h.service.CreateNotification(
+	notificationType, err := model.ParseNotificationType(req.Type)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.service.CreateNotification(
 		req.UserID,
-		model.NotificationType(req.Type),
+		notificationType,
 		req.Title,
 		req.Body,
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": "failed to create notification"})
+		if errors.Is(err, service.ErrUnsupportedNotificationType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create notification"})
 		return
 	}
 
