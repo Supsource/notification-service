@@ -1,35 +1,20 @@
 package delivery
 
 import (
-	"context"
-
-	firebase "firebase.google.com/go"
-	"firebase.google.com/go/messaging"
+	"log"
 
 	"notification-service/internal/model"
 )
 
 type PushSender struct {
-	client *messaging.Client
+	logger *log.Logger
 }
 
-func NewPushSender(app *firebase.App) (*PushSender, error) {
-	client, err := app.Messaging(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return &PushSender{client: client}, nil
+func NewPushSender() *PushSender {
+	return &PushSender{logger: log.Default()}
 }
 
 func (s *PushSender) Send(n *model.Notification) error {
-	msg := &messaging.Message{
-		Notification: &messaging.Notification{
-			Title: n.Title,
-			Body:  n.Body,
-		},
-		Token: "DEVICE_FCM_TOCKEN", // todo -> later from db
-	}
-
-	_, err := s.client.Send(context.Background(), msg)
-	return err
+	s.logger.Printf("stub push delivery for notification %s to user %s", n.ID, n.UserID)
+	return nil
 }

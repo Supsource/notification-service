@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"notification-service/internal/model"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+var ErrUnsupportedNotificationType = errors.New("unsupported notification type")
 
 type NotificationService struct {
 	repo       repository.NotificationRepository
@@ -29,6 +32,10 @@ func (s *NotificationService) CreateNotification(
 	title string,
 	body string,
 ) error {
+	if !nType.IsSupported() {
+		return ErrUnsupportedNotificationType
+	}
+
 	notification := &model.Notification{
 		ID:         uuid.New().String(),
 		UserID:     userID,

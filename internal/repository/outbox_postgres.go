@@ -150,7 +150,7 @@ func (r *PostgresOutboxRepo) RetryFailed(ctx context.Context, ids []string) (int
 	if len(ids) == 0 {
 		query := `
 			UPDATE notifications_outbox
-			SET status = $1, next_retry_at = NOW(), updated_at = NOW()
+			SET status = $1, retry_count = 0, next_retry_at = NOW(), updated_at = NOW()
 			WHERE status = $2
 		`
 		ct, err := r.db.Exec(ctx, query, model.OutboxStatusPending, model.OutboxStatusFailed)
@@ -159,7 +159,7 @@ func (r *PostgresOutboxRepo) RetryFailed(ctx context.Context, ids []string) (int
 
 	query := `
 		UPDATE notifications_outbox
-		SET status = $1, next_retry_at = NOW(), updated_at = NOW()
+		SET status = $1, retry_count = 0, next_retry_at = NOW(), updated_at = NOW()
 		WHERE status = $2 AND id = ANY($3)
 	`
 	ct, err := r.db.Exec(ctx, query, model.OutboxStatusPending, model.OutboxStatusFailed, ids)

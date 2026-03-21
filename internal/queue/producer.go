@@ -7,8 +7,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const NotificationQueue = "notification_queue"
-
 type Producer struct {
 	redis     RedisClient
 	queueName string

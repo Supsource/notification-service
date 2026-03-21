@@ -13,12 +13,13 @@ import (
 func main() {
 	dbPool := db.NewPostgresPool()
 	outboxRepo := repository.NewPostgresOutboxRepo(dbPool)
+	notificationRepo := repository.NewPostgresNotificationRepo(dbPool)
 
 	factory := delivery.NewFactory(
-		&delivery.EmailSender{},
-		&delivery.PushSender{},
+		delivery.NewEmailSender("", "", "", ""),
+		delivery.NewPushSender(),
 	)
 
-	worker := workers.NewOutboxWorker(outboxRepo, factory, log.Default())
+	worker := workers.NewOutboxWorker(notificationRepo, outboxRepo, factory, log.Default())
 	worker.Run(context.Background())
 }
